@@ -547,6 +547,16 @@ class Order:
         self.order_secrets: list[str] = order_secrets
         """Список товаров автовыдачи FunPay заказа."""
 
+    @property
+    def price(self) -> float:
+        """Сумма заказа (алиас для self.sum)."""
+        return self.sum
+
+    @property
+    def secrets(self) -> list[str]:
+        """Список товаров автовыдачи FunPay (алиас для self.order_secrets)."""
+        return self.order_secrets
+
     def get_field(self, key: str) -> LotField | None:
         """
         Возвращает объект поля лота по его ключу.
@@ -1488,6 +1498,11 @@ class Review:
         """Оставлен ли отзыв ботом?"""
         self.reply_by_bot: bool = reply_by_bot
         """Оставлен ли ответ на отзыв ботом?"""
+
+    @property
+    def rating(self) -> int | None:
+        """Кол-во звезд в отзыве (алиас для self.stars)."""
+        return self.stars
 
 
 class Balance:

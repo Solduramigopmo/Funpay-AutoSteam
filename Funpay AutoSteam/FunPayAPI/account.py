@@ -543,15 +543,28 @@ class Account:
             side = offer.find("div", class_="tc-side")
             side = side.text if side else None
             tc_price = offer.find("div", class_="tc-price")
-            price = float(tc_price["data-s"])
-            if currency is None:
-                currency = parse_currency(tc_price.find("span", class_="unit").text)
-                if self.currency != currency:
-                    self.currency = currency
+            price_str = tc_price.get("data-s") if tc_price else None
+            if price_str:
+                price = float(price_str)
+            elif tc_price:
+                price_txt = tc_price.text.split()[0].replace(",", ".")
+                price = float(re.sub(r"[^\d.]", "", price_txt) or 0)
+            else:
+                price = 0.0
+
+            if currency is None and tc_price:
+                unit_span = tc_price.find("span", class_="unit")
+                if unit_span:
+                    currency = parse_currency(unit_span.text)
+                    if self.currency != currency:
+                        self.currency = currency
             auto = bool(tc_price.find("i", class_="auto-dlv-icon"))
             tc_amount = offer.find("div", class_="tc-amount")
-            amount = tc_amount.text.replace(" ", "") if tc_amount else None
-            amount = int(amount) if amount and amount.isdigit() else None
+            if tc_amount:
+                digits = "".join([c for c in tc_amount.text if c.isdigit()])
+                amount = int(digits) if digits else None
+            else:
+                amount = None
             active = "warning" not in offer.get("class", [])
             lot_obj = types.MyLotShortcut(offer_id, server, side, description, amount, price, currency, subcategory_obj,
                                           auto, active, str(offer))
@@ -942,9 +955,12 @@ class Account:
                                 "You cannot message multiple users too frequently."):
                 self.last_multiuser_flood_err_time = time.time()
             raise exceptions.MessageNotDeliveredError(response, error_text, chat_id)
-        obj = next(iter([i for i in json_response["objects"] if (i["type"] == "chat_node" and (chat_id in (i["data"]["node"]["id"],
-                                                                   str(i["data"]["node"]["id"]),
-                                                                   i["data"]["node"]["name"])))]), None)
+        obj = next(iter([i for i in json_response.get("objects", []) if (
+            i.get("type") == "chat_node" and (
+                (node := i.get("data", {}).get("node", {})) and
+                chat_id in (node.get("id"), str(node.get("id")), node.get("name"))
+            )
+        )]), None)
         is_private_chat = True
         if obj is None:
             message_text = text
@@ -1436,9 +1452,9 @@ class Account:
         :rtype: :class:`FunPayAPI.types.OrderShortcut`
         """
         # todo взаимодействие с покупками
-        if not self.runner or self.runner.saved_orders is None:
-            return self.get_sales(id=order_id)[1][0]
-        return self.runner.saved_orders.get(order_id, self.get_sales(id=order_id)[1][0])
+        if self.runner and self.runner.saved_orders and order_id in self.runner.saved_orders:
+            return self.runner.saved_orders[order_id]
+        return self.get_sales(id=order_id)[1][0]
 
     def get_orders_by_ids(self, *order_ids: str, include_details: bool = True,
                            include_users: bool = True,
@@ -1870,19 +1886,24 @@ class Account:
         result.update({field["name"]: "on" for field in bs.find_all("input", {"type": "checkbox"}, checked=True)})
         subcategory = self.get_subcategory(enums.SubCategoryTypes.COMMON, int(result.get("node_id", 0)))
         self.csrf_token = result.get("csrf_token") or self.csrf_token
-        currency = utils.parse_currency(bs.find("span", class_="form-control-feedback").text)
+        feedback_span = bs.find("span", class_="form-control-feedback")
+        currency = utils.parse_currency(feedback_span.text) if feedback_span else self.currency
         if self.currency != currency:
             self.currency = currency
-        bs_buyer_prices = bs.find("table", class_="table-buyers-prices").find_all("tr")
+        buyers_table = bs.find("table", class_="table-buyers-prices")
+        bs_buyer_prices = buyers_table.find_all("tr") if buyers_table else []
         payment_methods = []
         for i, pm in enumerate(bs_buyer_prices):
-            pm_price, pm_currency = pm.find("td").text.rsplit(maxsplit=1)
-            pm_price = float(pm_price.replace(" ", ""))
-            pm_currency = parse_currency(pm_currency)
-            payment_methods.append(PaymentMethod(pm.find("th").text, pm_price, pm_currency, i))
+            pm_td = pm.find("td")
+            if pm_td:
+                pm_price, pm_currency = pm_td.text.rsplit(maxsplit=1)
+                pm_price = float(pm_price.replace(" ", ""))
+                pm_currency = parse_currency(pm_currency)
+                payment_methods.append(PaymentMethod(pm.find("th").text, pm_price, pm_currency, i))
         calc_result = CalcResult(types.SubCategoryTypes.COMMON, subcategory.id, payment_methods,
-                                 float(result["price"]), None, types.Currency.UNKNOWN, currency)
-        db_amount = json.loads(html.unescape(bs.get("data-offer"))).get("amount")
+                                 float(result.get("price", 0)), None, types.Currency.UNKNOWN, currency)
+        raw_offer_data = bs.get("data-offer")
+        db_amount = json.loads(html.unescape(raw_offer_data)).get("amount") if raw_offer_data else None
         return types.LotFields(lot_id, result, subcategory, currency, calc_result, db_amount)
 
     def get_create_lot_fields(self, category_id: int) -> types.LotFields:
