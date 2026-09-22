@@ -11,6 +11,9 @@ from FunPayAPI import Account
 from FunPayAPI.updater.runner import Runner
 from FunPayAPI.updater.events import NewOrderEvent, NewMessageEvent
 
+_env_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".env")
+if os.path.exists(_env_path):
+    load_dotenv(_env_path)
 load_dotenv()
 
 FUNPAY_AUTH_TOKEN = os.getenv("FUNPAY_AUTH_TOKEN")
