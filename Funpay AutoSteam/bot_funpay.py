@@ -1,11 +1,46 @@
+import sys
 import os
+import subprocess
 import uuid
 import logging
 import re
 import time
 import threading
-import requests
-from dotenv import load_dotenv
+
+# Настройка UTF-8 для корректного отображения в консоли Windows
+if hasattr(sys.stdout, "reconfigure"):
+    try:
+        sys.stdout.reconfigure(encoding="utf-8")
+    except Exception:
+        pass
+
+# Проверка и импорт сторонних библиотек с защитой от мгновенного вылета окна
+try:
+    import requests
+    from dotenv import load_dotenv
+    import bs4
+except ModuleNotFoundError as err:
+    print("\n" + "=" * 60)
+    print(f"[-] Не установлена необходимая библиотека: {getattr(err, 'name', err)}")
+    print("    Попытка автоматической установки зависимостей...")
+    print("=" * 60)
+    req_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), "requirements.txt")
+    if not os.path.exists(req_file):
+        req_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "requirements.txt")
+    try:
+        cmd = [sys.executable, "-m", "pip", "install", "-r", req_file] if os.path.exists(req_file) else [
+            sys.executable, "-m", "pip", "install", "requests", "python-dotenv", "beautifulsoup4", "requests-toolbelt", "colorama", "lxml"
+        ]
+        subprocess.check_call(cmd)
+        print("[+] Зависимости успешно установлены! Запустите бота повторно.")
+    except Exception as install_err:
+        print(f"[-] Не удалось установить зависимости автоматически: {install_err}")
+        print("    Выполните вручную в терминале: pip install -r requirements.txt")
+    try:
+        input("\nНажмите Enter, чтобы закрыть окно...")
+    except Exception:
+        pass
+    sys.exit(1)
 
 from FunPayAPI import Account
 from FunPayAPI.updater.runner import Runner
