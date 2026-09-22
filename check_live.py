@@ -33,12 +33,17 @@ def main():
     token = None
     if len(sys.argv) > 1:
         token = sys.argv[1].strip()
-    elif os.path.exists(os.path.join("Funpay AutoSteam", ".env")):
+    else:
+        # Проверяем .env в корне и в папке Funpay AutoSteam
         from dotenv import load_dotenv
-        load_dotenv(os.path.join("Funpay AutoSteam", ".env"))
-        env_tok = os.getenv("FUNPAY_AUTH_TOKEN", "").strip()
-        if env_tok and env_tok != "FUNPAY_AUTH_TOKEN":
-            token = env_tok
+        for env_path in [".env", os.path.join("Funpay AutoSteam", ".env")]:
+            if os.path.exists(env_path):
+                load_dotenv(env_path)
+                env_tok = (os.getenv("FUNPAY_AUTH_TOKEN") or os.getenv("GOLDEN_KEY") or "").strip()
+                if env_tok and env_tok not in ("FUNPAY_AUTH_TOKEN", "GOLDEN_KEY"):
+                    token = env_tok
+                    print(f"[i] Токен автоматически подхвачен из {env_path}")
+                    break
 
     if not token:
         print("\nГде взять golden_key:")
