@@ -823,15 +823,34 @@ def _banner():
     logger.info(Style.NORMAL + Fore.MAGENTA + f"   Автор: {CREATOR_NAME} | TG: {CREATOR_URL} | Канал: {CHANNEL_URL} | GitHub: {GITHUB_URL}\n")
 
 def main():
-    if not FUNPAY_AUTH_TOKEN:
-        raise RuntimeError("FUNPAY_AUTH_TOKEN не найден в .env")
-    if not (STEAM_API_USER and STEAM_API_PASS):
-        raise RuntimeError("STEAM_API_USER/STEAM_API_PASS не найдены в .env")
+    token = (FUNPAY_AUTH_TOKEN or "").strip()
+    if not token or token == "FUNPAY_AUTH_TOKEN":
+        logger.error(Fore.RED + "[-] В файле .env не указан реальный токен FunPay (FUNPAY_AUTH_TOKEN)!")
+        print("\n" + "=" * 60)
+        print("  Как настроить .env:")
+        print("  1. Откройте funpay.com в браузере и авторизуйтесь.")
+        print("  2. Нажмите F12 -> Application (Приложение) -> Cookies -> golden_key.")
+        print("  3. Скопируйте значение и вставьте в .env вместо FUNPAY_AUTH_TOKEN.")
+        print("=" * 60 + "\n")
+        return
+
+    steam_user = (STEAM_API_USER or "").strip()
+    steam_pass = (STEAM_API_PASS or "").strip()
+    if not steam_user or steam_user == "STEAM_API_USER" or not steam_pass or steam_pass == "STEAM_API_PASS":
+        logger.warning(Fore.YELLOW + "[!] Внимание: STEAM_API_USER или STEAM_API_PASS не настроены в .env!")
 
     logger.info(Fore.CYAN + f"[CFG] AUTO_REFUND={AUTO_REFUND}, AUTO_DEACTIVATE={AUTO_DEACTIVATE}, MIN_BALANCE={MIN_BALANCE}")
 
-    account = Account(FUNPAY_AUTH_TOKEN)
-    account.get()
+    account = Account(token)
+    try:
+        account.get()
+    except exceptions.UnauthorizedError:
+        logger.error(Fore.RED + "[-] Ошибка: FunPay отклонил токен (UnauthorizedError). Проверьте актуальность golden_key в .env!")
+        return
+    except Exception as e:
+        logger.error(Fore.RED + f"[-] Ошибка авторизации: {e}")
+        return
+
     logger.info(Fore.GREEN + f"🔐 Авторизован как {getattr(account, 'username', '(unknown)')}")
 
     global MY_ID
@@ -855,4 +874,12 @@ def main():
             logger.exception(Fore.RED + "Ошибка в основном цикле")
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except Exception as e:
+        logger.exception(Fore.RED + f"Непредвиденная критическая ошибка: {e}")
+    finally:
+        try:
+            input("\nНажмите Enter, чтобы закрыть окно...")
+        except Exception:
+            pass
